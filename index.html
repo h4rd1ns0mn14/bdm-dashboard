@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BDM Dashboard - Управление магазинами</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-chart-line"></i>
+                    <h2>BDM Panel</h2>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Главная панель</span>
+                </a>
+                <a href="#stores" class="nav-item" data-page="stores">
+                    <i class="fas fa-store"></i>
+                    <span>Магазины</span>
+                </a>
+                <a href="#deals" class="nav-item" data-page="deals">
+                    <i class="fas fa-handshake"></i>
+                    <span>Сделки</span>
+                </a>
+                <a href="#analytics" class="nav-item" data-page="analytics">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Аналитика</span>
+                </a>
+                <a href="#tasks" class="nav-item" data-page="tasks">
+                    <i class="fas fa-tasks"></i>
+                    <span>Задачи</span>
+                </a>
+                <a href="#contacts" class="nav-item" data-page="contacts">
+                    <i class="fas fa-address-book"></i>
+                    <span>Контакты</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn btn-secondary" onclick="toggleTheme()" style="width: 100%; margin-top: 20px;">
+                    <i class="fas fa-moon"></i>
+                    Темная тема
+                </button>
+                <button class="btn btn-secondary" onclick="exportData('json')" style="width: 100%; margin-top: 10px;">
+                    <i class="fas fa-download"></i>
+                    Экспорт
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-left">
+                    <h1 id="page-title">Главная панель</h1>
+                </div>
+                <div class="header-right">
+                    <input type="text" class="global-search" placeholder="Поиск по магазинам, сделкам..." id="globalSearch">
+                    <span class="date" id="current-date"></span>
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span>BDM Manager</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="dashboard-grid">
+                    <div class="stat-card primary">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Общий доход</h3>
+                            <p class="stat-value" id="total-revenue">6.45 млн ₽</p>
+                            <span class="stat-change positive">+12.5%</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card success">
+                        <div class="stat-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Активные магазины</h3>
+                            <p class="stat-value" id="active-stores">3</p>
+                            <span class="stat-change neutral">из 5 всего</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning">
+                        <div class="stat-icon">
+                            <i class="fas fa-handshake"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Активные сделки</h3>
+                            <p class="stat-value" id="active-deals">4</p>
+                            <span class="stat-change positive">75% конверсия</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card info">
+                        <div class="stat-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Задачи на сегодня</h3>
+                            <p class="stat-value" id="today-tasks">3</p>
+                            <span class="stat-change neutral">2 высокий приоритет</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>Динамика продаж за 6 месяцев</h3>
+                        <canvas id="salesChart" width="400" height="200"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Топ магазины по доходу</h3>
+                        <div class="top-stores" id="top-stores">
+                            <!-- Данные загружаются через JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stores Page -->
+            <div id="stores-page" class="page">
+                <div class="page-header">
+                    <h2>Управление магазинами</h2>
+                    <button class="btn btn-primary" onclick="openStoreModal()">
+                        <i class="fas fa-plus"></i>
+                        Добавить магазин
+                    </button>
+                </div>
+                <div class="stores-grid" id="stores-grid">
+                    <!-- Магазины загружаются через JavaScript -->
+                </div>
+            </div>
+
+            <!-- Deals Page -->
+            <div id="deals-page" class="page">
+                <div class="page-header">
+                    <h2>Управление сделками</h2>
+                    <button class="btn btn-primary" onclick="openDealModal()">
+                        <i class="fas fa-plus"></i>
+                        Создать сделку
+                    </button>
+                </div>
+
+                <div class="kanban-board">
+                    <div class="kanban-column" data-status="leads">
+                        <div class="column-header">
+                            <h3>Лиды</h3>
+                            <span class="deal-count" id="leads-count">0</span>
+                        </div>
+                        <div class="deals-container" id="leads-deals">
+                            <!-- Сделки загружаются через JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="kanban-column" data-status="negotiation">
+                        <div class="column-header">
+                            <h3>Переговоры</h3>
+                            <span class="deal-count" id="negotiation-count">0</span>
+                        </div>
+                        <div class="deals-container" id="negotiation-deals">
+                            <!-- Сделки загружаются через JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="kanban-column" data-status="contract">
+                        <div class="column-header">
+                            <h3>Договор</h3>
+                            <span class="deal-count" id="contract-count">0</span>
+                        </div>
+                        <div class="deals-container" id="contract-deals">
+                            <!-- Сделки загружаются через JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="kanban-column" data-status="closed">
+                        <div class="column-header">
+                            <h3>Закрыто</h3>
+                            <span class="deal-count" id="closed-count">0</span>
+                        </div>
+                        <div class="deals-container" id="closed-deals">
+                            <!-- Сделки загружаются через JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div id="analytics-page" class="page">
+                <div class="page-header">
+                    <h2>Аналитика и отчеты</h2>
+                    <div>
+                        <button class="btn btn-secondary" onclick="exportData('csv')">
+                            <i class="fas fa-file-csv"></i>
+                            CSV
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportData('json')">
+                            <i class="fas fa-file-code"></i>
+                            JSON
+                        </button>
+                    </div>
+                </div>
+                <div class="analytics-grid">
+                    <div class="chart-container">
+                        <h3>Статистика по типам магазинов</h3>
+                        <canvas id="storeTypesChart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Конверсия сделок</h3>
+                        <canvas id="conversionChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks Page -->
+            <div id="tasks-page" class="page">
+                <div class="page-header">
+                    <h2>Задачи и планирование</h2>
+                    <button class="btn btn-primary" onclick="openTaskModal()">
+                        <i class="fas fa-plus"></i>
+                        Добавить задачу
+                    </button>
+                </div>
+                <div class="tasks-container" id="tasks-container">
+                    <!-- Задачи загружаются через JavaScript -->
+                </div>
+            </div>
+
+            <!-- Contacts Page -->
+            <div id="contacts-page" class="page">
+                <div class="page-header">
+                    <h2>База контактов</h2>
+                    <button class="btn btn-primary" onclick="openContactModal()">
+                        <i class="fas fa-plus"></i>
+                        Добавить контакт
+                    </button>
+                </div>
+                <div class="contacts-grid" id="contacts-grid">
+                    <!-- Контакты загружаются через JavaScript -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Deal Modal -->
+    <div id="dealModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создать новую сделку</h3>
+                <button class="close" onclick="closeDealModal()" type="button">&times;</button>
+            </div>
+            <form id="dealForm" class="modal-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealTitle">Название сделки *</label>
+                        <input type="text" id="dealTitle" name="title" required 
+                               placeholder="Введите название сделки">
+                    </div>
+                    <div class="form-group">
+                        <label for="dealStore">Магазин *</label>
+                        <select id="dealStore" name="storeId" required>
+                            <option value="">Выберите магазин</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealAmount">Сумма сделки *</label>
+                        <input type="number" id="dealAmount" name="amount" required 
+                               placeholder="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="dealProbability">Вероятность (%)</label>
+                        <input type="number" id="dealProbability" name="probability" 
+                               placeholder="50" min="0" max="100" value="50">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealDate">Планируемая дата закрытия</label>
+                        <input type="date" id="dealDate" name="expectedCloseDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="dealStatus">Статус</label>
+                        <select id="dealStatus" name="status">
+                            <option value="leads">Лиды</option>
+                            <option value="negotiation">Переговоры</option>
+                            <option value="contract">Договор</option>
+                            <option value="closed">Закрыто</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="dealDescription">Описание</label>
+                    <textarea id="dealDescription" name="description" rows="3" 
+                              placeholder="Краткое описание сделки"></textarea>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="form-group file-upload-section">
+                    <label class="file-upload-label">
+                        <i class="fas fa-paperclip"></i>
+                        Прикрепить файлы
+                    </label>
+                    <div class="file-upload-area" id="fileUploadArea">
+                        <div class="file-upload-content">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Перетащите файлы сюда или нажмите для выбора</p>
+                            <small>Поддерживаются: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (макс. 10MB)</small>
+                        </div>
+                        <input type="file" id="dealFiles" name="files" multiple 
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+                    </div>
+                    <div class="uploaded-files" id="uploadedFiles"></div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeDealModal()">
+                        <i class="fas fa-times"></i>
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Создать сделку
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Store Modal -->
+    <div id="storeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить магазин</h3>
+                <button class="close" onclick="closeStoreModal()" type="button">&times;</button>
+            </div>
+            <form id="storeForm" class="modal-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="storeName">Название *</label>
+                        <input type="text" id="storeName" name="name" required
+                               placeholder="Название магазина">
+                    </div>
+                    <div class="form-group">
+                        <label for="storeType">Тип *</label>
+                        <select id="storeType" name="type" required>
+                            <option value="">Выберите тип</option>
+                            <option value="Электроника">Электроника</option>
+                            <option value="Компьютеры и IT">Компьютеры и IT</option>
+                            <option value="Смарт-техника">Смарт-техника</option>
+                            <option value="Мобильные устройства">Мобильные устройства</option>
+                            <option value="ПО и сервисы">ПО и сервисы</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="storeAddress">Адрес *</label>
+                    <input type="text" id="storeAddress" name="address" required
+                           placeholder="Полный адрес магазина">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="storeContact">Телефон *</label>
+                        <input type="tel" id="storeContact" name="contact" required
+                               placeholder="+7 (xxx) xxx-xx-xx">
+                    </div>
+                    <div class="form-group">
+                        <label for="storeEmail">Email *</label>
+                        <input type="email" id="storeEmail" name="email" required
+                               placeholder="email@example.com">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="storeManager">Менеджер *</label>
+                    <input type="text" id="storeManager" name="manager" required
+                           placeholder="ФИО ответственного менеджера">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeStoreModal()">
+                        <i class="fas fa-times"></i>
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Добавить магазин
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Загрузка...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

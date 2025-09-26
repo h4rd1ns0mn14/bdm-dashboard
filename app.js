@@ -1,4 +1,4 @@
-// BDM Dashboard - Полная версия с тестированием всех функций
+// BDM Dashboard - Полная версия с редактированием, импортом Excel и всеми функциями
 let appData = {
     stores: [
         {
@@ -117,6 +117,9 @@ let appData = {
 };
 
 let currentTheme = 'light';
+let editingStoreId = null;
+let editingTaskId = null;
+let editingContactId = null;
 
 // Система уведомлений
 function showNotification(message, type = 'success') {
@@ -276,10 +279,22 @@ function filterContent(query) {
             const text = card.textContent.toLowerCase();
             card.style.display = text.includes(query) ? 'block' : 'none';
         });
+    } else if (currentPage.id === 'tasks-page') {
+        const taskCards = currentPage.querySelectorAll('.task-card');
+        taskCards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            card.style.display = text.includes(query) ? 'block' : 'none';
+        });
+    } else if (currentPage.id === 'contacts-page') {
+        const contactCards = currentPage.querySelectorAll('.contact-card');
+        contactCards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            card.style.display = text.includes(query) ? 'block' : 'none';
+        });
     }
 }
 
-// Загрузка файлов
+// Загрузка файлов для сделок
 function setupFileUpload() {
     const fileArea = document.getElementById('fileUploadArea');
     const fileInput = document.getElementById('dealFiles');
@@ -386,6 +401,148 @@ function setupFileUpload() {
 function removeFile(button) {
     button.parentElement.remove();
     showNotification('Файл удален');
+}
+
+// Excel импорт
+function setupExcelImport() {
+    const excelFile = document.getElementById('excelFile');
+    const excelUploadArea = document.getElementById('excelUploadArea');
+
+    if (!excelFile || !excelUploadArea) return;
+
+    excelUploadArea.addEventListener('click', () => {
+        excelFile.click();
+    });
+
+    excelFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            readExcelFile(file);
+        }
+    });
+}
+
+function readExcelFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            displayExcelPreview(jsonData);
+        } catch (error) {
+            console.error('Ошибка при чтении Excel файла:', error);
+            showNotification('Ошибка при чтении Excel файла', 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function displayExcelPreview(data) {
+    const preview = document.getElementById('excelPreview');
+    const table = document.getElementById('previewTable');
+    const summary = document.getElementById('importSummary');
+    const importBtn = document.getElementById('importBtn');
+
+    if (!data || data.length === 0) {
+        showNotification('Excel файл пуст или имеет неверный формат', 'error');
+        return;
+    }
+
+    // Очищаем таблицу
+    table.innerHTML = '';
+
+    // Создаем заголовки
+    const headers = Object.keys(data[0]);
+    const headerRow = document.createElement('tr');
+    headers.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    table.appendChild(headerRow);
+
+    // Добавляем первые 5 строк для предварительного просмотра
+    data.slice(0, 5).forEach(row => {
+        const tr = document.createElement('tr');
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            td.textContent = row[header] || '';
+            tr.appendChild(td);
+        });
+        table.appendChild(tr);
+    });
+
+    // Показываем сводку
+    summary.innerHTML = `
+        <strong>Найдено строк:</strong> ${data.length}<br>
+        <strong>Колонки:</strong> ${headers.join(', ')}<br>
+        <small>Показаны первые 5 строк</small>
+    `;
+
+    // Показываем предварительный просмотр и кнопку импорта
+    preview.style.display = 'block';
+    importBtn.style.display = 'inline-flex';
+
+    // Сохраняем данные для импорта
+    window.excelDataToImport = data;
+}
+
+function importFromExcel() {
+    const data = window.excelDataToImport;
+    if (!data || data.length === 0) {
+        showNotification('Нет данных для импорта', 'error');
+        return;
+    }
+
+    let imported = 0;
+    let errors = 0;
+
+    data.forEach((row, index) => {
+        try {
+            // Мапим колонки Excel на поля магазина
+            const store = {
+                id: Date.now() + index,
+                name: row['Название'] || row['Name'] || `Магазин ${index + 1}`,
+                type: row['Тип'] || row['Type'] || 'Не указан',
+                address: row['Адрес'] || row['Address'] || '',
+                contact: row['Телефон'] || row['Phone'] || '',
+                email: row['Email'] || row['email'] || '',
+                manager: row['Менеджер'] || row['Manager'] || '',
+                status: 'potential',
+                monthlyRevenue: parseInt(row['Доход'] || row['Revenue'] || 0),
+                contractDate: null,
+                rating: 0
+            };
+
+            // Валидация обязательных полей
+            if (store.name && store.type) {
+                appData.stores.push(store);
+                imported++;
+            } else {
+                errors++;
+                console.warn(`Строка ${index + 1}: отсутствуют обязательные поля`);
+            }
+        } catch (error) {
+            errors++;
+            console.error(`Ошибка импорта строки ${index + 1}:`, error);
+        }
+    });
+
+    // Обновляем интерфейс
+    renderStores();
+    closeExcelImportModal();
+    autoSave();
+
+    // Показываем результат импорта
+    if (imported > 0) {
+        showNotification(`Импортировано магазинов: ${imported}${errors > 0 ? `, ошибок: ${errors}` : ''}`, imported > 0 ? 'success' : 'warning');
+    } else {
+        showNotification('Не удалось импортировать ни одного магазина', 'error');
+    }
 }
 
 // Рендеринг данных
@@ -587,13 +744,21 @@ function renderStores() {
         const storeDiv = document.createElement('div');
         storeDiv.className = 'store-card';
         storeDiv.innerHTML = `
+            <div class="store-actions">
+                <button class="btn-icon edit" onclick="editStore(${store.id})" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="confirmDeleteStore(${store.id})" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
             <h3>${store.name}</h3>
             <p><strong>Тип:</strong> ${store.type}</p>
             <p><strong>Адрес:</strong> ${store.address}</p>
             <p><strong>Телефон:</strong> ${store.contact}</p>
             <p><strong>Email:</strong> ${store.email}</p>
             <p><strong>Менеджер:</strong> ${store.manager}</p>
-            <p><strong>Статус:</strong> ${getStoreStatusName(store.status)}</p>
+            <p><strong>Статус:</strong> <span class="status-badge ${store.status}">${getStoreStatusName(store.status)}</span></p>
             <p><strong>Доход в месяц:</strong> ${store.monthlyRevenue.toLocaleString()} ₽</p>
             ${store.rating > 0 ? `<p><strong>Рейтинг:</strong> ${store.rating}/5</p>` : ''}
         `;
@@ -610,6 +775,62 @@ function getStoreStatusName(status) {
     return names[status] || status;
 }
 
+function editStore(storeId) {
+    const store = appData.stores.find(s => s.id === storeId);
+    if (!store) return;
+
+    editingStoreId = storeId;
+
+    // Заполняем форму данными магазина
+    document.getElementById('storeId').value = store.id;
+    document.getElementById('storeName').value = store.name;
+    document.getElementById('storeType').value = store.type;
+    document.getElementById('storeAddress').value = store.address;
+    document.getElementById('storeContact').value = store.contact;
+    document.getElementById('storeEmail').value = store.email;
+    document.getElementById('storeManager').value = store.manager;
+    document.getElementById('storeRevenue').value = store.monthlyRevenue;
+
+    // Изменяем заголовок и кнопку
+    document.getElementById('storeModalTitle').textContent = 'Редактировать магазин';
+    document.getElementById('storeSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Сохранить изменения';
+
+    // Открываем модальное окно
+    openStoreModal();
+}
+
+function confirmDeleteStore(storeId) {
+    const store = appData.stores.find(s => s.id === storeId);
+    if (!store) return;
+
+    showConfirmModal(
+        'Удаление магазина',
+        `Вы уверены, что хотите удалить магазин "${store.name}"? Это действие нельзя отменить.`,
+        () => deleteStore(storeId)
+    );
+}
+
+function deleteStore(storeId) {
+    const index = appData.stores.findIndex(s => s.id === storeId);
+    if (index !== -1) {
+        const deletedStore = appData.stores.splice(index, 1)[0];
+
+        // Удаляем связанные сделки и задачи
+        appData.deals = appData.deals.filter(deal => deal.storeId !== storeId);
+        appData.tasks = appData.tasks.filter(task => task.storeId !== storeId);
+        appData.contacts = appData.contacts.filter(contact => contact.storeId !== storeId);
+
+        renderStores();
+        renderDeals();
+        renderTasks();
+        renderContacts();
+        renderDashboard();
+        autoSave();
+
+        showNotification(`Магазин "${deletedStore.name}" удален`);
+    }
+}
+
 function renderTasks() {
     const container = document.getElementById('tasks-container');
     if (!container) return;
@@ -617,16 +838,24 @@ function renderTasks() {
     container.innerHTML = '';
 
     appData.tasks.forEach(task => {
+        const store = appData.stores.find(s => s.id === task.storeId);
         const taskDiv = document.createElement('div');
         taskDiv.className = `task-card ${task.priority}-priority`;
         taskDiv.innerHTML = `
-            <div>
+            <div class="task-info">
                 <h3>${task.title}</h3>
                 <p>${task.description}</p>
-                <small>Срок: ${new Date(task.dueDate).toLocaleDateString('ru-RU')}</small>
+                ${store ? `<small><strong>Магазин:</strong> ${store.name}</small><br>` : ''}
+                <small><strong>Срок:</strong> ${new Date(task.dueDate).toLocaleDateString('ru-RU')}</small>
             </div>
-            <div>
-                <span class="priority ${task.priority}">${getPriorityName(task.priority)}</span>
+            <div class="task-actions">
+                <span class="priority-badge ${task.priority}">${getPriorityName(task.priority)}</span>
+                <button class="btn-icon edit" onclick="editTask(${task.id})" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="confirmDeleteTask(${task.id})" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
         `;
         container.appendChild(taskDiv);
@@ -642,6 +871,50 @@ function getPriorityName(priority) {
     return names[priority] || priority;
 }
 
+function editTask(taskId) {
+    const task = appData.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    editingTaskId = taskId;
+
+    // Заполняем форму данными задачи
+    document.getElementById('taskId').value = task.id;
+    document.getElementById('taskTitle').value = task.title;
+    document.getElementById('taskDescription').value = task.description;
+    document.getElementById('taskDueDate').value = task.dueDate;
+    document.getElementById('taskPriority').value = task.priority;
+    document.getElementById('taskStore').value = task.storeId || '';
+
+    // Изменяем заголовок и кнопку
+    document.getElementById('taskModalTitle').textContent = 'Редактировать задачу';
+    document.getElementById('taskSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Сохранить изменения';
+
+    // Открываем модальное окно
+    openTaskModal();
+}
+
+function confirmDeleteTask(taskId) {
+    const task = appData.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    showConfirmModal(
+        'Удаление задачи',
+        `Вы уверены, что хотите удалить задачу "${task.title}"?`,
+        () => deleteTask(taskId)
+    );
+}
+
+function deleteTask(taskId) {
+    const index = appData.tasks.findIndex(t => t.id === taskId);
+    if (index !== -1) {
+        const deletedTask = appData.tasks.splice(index, 1)[0];
+        renderTasks();
+        renderDashboard();
+        autoSave();
+        showNotification(`Задача "${deletedTask.title}" удалена`);
+    }
+}
+
 function renderContacts() {
     const container = document.getElementById('contacts-grid');
     if (!container) return;
@@ -652,6 +925,14 @@ function renderContacts() {
         const contactDiv = document.createElement('div');
         contactDiv.className = 'contact-card';
         contactDiv.innerHTML = `
+            <div class="contact-actions">
+                <button class="btn-icon edit" onclick="editContact(${contact.id})" title="Редактировать">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="confirmDeleteContact(${contact.id})" title="Удалить">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
             <h3>${contact.name}</h3>
             <p><strong>Должность:</strong> ${contact.position}</p>
             <p><strong>Магазин:</strong> ${contact.storeName}</p>
@@ -663,8 +944,50 @@ function renderContacts() {
     });
 }
 
+function editContact(contactId) {
+    const contact = appData.contacts.find(c => c.id === contactId);
+    if (!contact) return;
+
+    editingContactId = contactId;
+
+    // Заполняем форму данными контакта
+    document.getElementById('contactId').value = contact.id;
+    document.getElementById('contactName').value = contact.name;
+    document.getElementById('contactPosition').value = contact.position;
+    document.getElementById('contactStore').value = contact.storeId;
+    document.getElementById('contactPhone').value = contact.phone;
+    document.getElementById('contactEmail').value = contact.email;
+
+    // Изменяем заголовок и кнопку
+    document.getElementById('contactModalTitle').textContent = 'Редактировать контакт';
+    document.getElementById('contactSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Сохранить изменения';
+
+    // Открываем модальное окно
+    openContactModal();
+}
+
+function confirmDeleteContact(contactId) {
+    const contact = appData.contacts.find(c => c.id === contactId);
+    if (!contact) return;
+
+    showConfirmModal(
+        'Удаление контакта',
+        `Вы уверены, что хотите удалить контакт "${contact.name}"?`,
+        () => deleteContact(contactId)
+    );
+}
+
+function deleteContact(contactId) {
+    const index = appData.contacts.findIndex(c => c.id === contactId);
+    if (index !== -1) {
+        const deletedContact = appData.contacts.splice(index, 1)[0];
+        renderContacts();
+        autoSave();
+        showNotification(`Контакт "${deletedContact.name}" удален`);
+    }
+}
+
 function renderAnalytics() {
-    // Здесь можно добавить дополнительные графики
     setTimeout(() => {
         renderStoreTypesChart();
         renderConversionChart();
@@ -783,6 +1106,12 @@ function openStoreModal() {
     const modal = document.getElementById('storeModal');
     if (modal) {
         modal.classList.add('active');
+
+        // Если не редактируем, сбрасываем форму
+        if (!editingStoreId) {
+            document.getElementById('storeModalTitle').textContent = 'Добавить магазин';
+            document.getElementById('storeSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Добавить магазин';
+        }
     }
 }
 
@@ -792,6 +1121,132 @@ function closeStoreModal() {
         modal.classList.remove('active');
         const form = document.getElementById('storeForm');
         if (form) form.reset();
+        editingStoreId = null;
+    }
+}
+
+function openExcelImportModal() {
+    const modal = document.getElementById('excelImportModal');
+    if (modal) {
+        modal.classList.add('active');
+        setupExcelImport();
+    }
+}
+
+function closeExcelImportModal() {
+    const modal = document.getElementById('excelImportModal');
+    if (modal) {
+        modal.classList.remove('active');
+        const preview = document.getElementById('excelPreview');
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('excelFile');
+
+        if (preview) preview.style.display = 'none';
+        if (importBtn) importBtn.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+
+        window.excelDataToImport = null;
+    }
+}
+
+function openTaskModal() {
+    const modal = document.getElementById('taskModal');
+    if (modal) {
+        modal.classList.add('active');
+
+        const storeSelect = document.getElementById('taskStore');
+        if (storeSelect && !editingTaskId) {
+            storeSelect.innerHTML = '<option value="">Выберите магазин (необязательно)</option>';
+
+            appData.stores.forEach(store => {
+                const option = document.createElement('option');
+                option.value = store.id;
+                option.textContent = store.name;
+                storeSelect.appendChild(option);
+            });
+        }
+
+        // Если не редактируем, сбрасываем форму
+        if (!editingTaskId) {
+            document.getElementById('taskModalTitle').textContent = 'Добавить задачу';
+            document.getElementById('taskSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Добавить задачу';
+        }
+    }
+}
+
+function closeTaskModal() {
+    const modal = document.getElementById('taskModal');
+    if (modal) {
+        modal.classList.remove('active');
+        const form = document.getElementById('taskForm');
+        if (form) form.reset();
+        editingTaskId = null;
+    }
+}
+
+function openContactModal() {
+    const modal = document.getElementById('contactModal');
+    if (modal) {
+        modal.classList.add('active');
+
+        const storeSelect = document.getElementById('contactStore');
+        if (storeSelect && !editingContactId) {
+            storeSelect.innerHTML = '<option value="">Выберите магазин</option>';
+
+            appData.stores.forEach(store => {
+                const option = document.createElement('option');
+                option.value = store.id;
+                option.textContent = store.name;
+                storeSelect.appendChild(option);
+            });
+        }
+
+        // Если не редактируем, сбрасываем форму
+        if (!editingContactId) {
+            document.getElementById('contactModalTitle').textContent = 'Добавить контакт';
+            document.getElementById('contactSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Добавить контакт';
+        }
+    }
+}
+
+function closeContactModal() {
+    const modal = document.getElementById('contactModal');
+    if (modal) {
+        modal.classList.remove('active');
+        const form = document.getElementById('contactForm');
+        if (form) form.reset();
+        editingContactId = null;
+    }
+}
+
+function showConfirmModal(title, message, onConfirm) {
+    const modal = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('confirmTitle');
+    const messageEl = document.getElementById('confirmMessage');
+    const confirmBtn = document.getElementById('confirmBtn');
+
+    if (modal && titleEl && messageEl && confirmBtn) {
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        // Удаляем старые обработчики
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        // Добавляем новый обработчик
+        newConfirmBtn.addEventListener('click', () => {
+            onConfirm();
+            closeConfirmModal();
+        });
+
+        modal.classList.add('active');
+    }
+}
+
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) {
+        modal.classList.remove('active');
     }
 }
 
@@ -799,6 +1254,8 @@ function closeStoreModal() {
 function setupFormHandlers() {
     const dealForm = document.getElementById('dealForm');
     const storeForm = document.getElementById('storeForm');
+    const taskForm = document.getElementById('taskForm');
+    const contactForm = document.getElementById('contactForm');
 
     if (dealForm) {
         dealForm.addEventListener('submit', (e) => {
@@ -823,6 +1280,7 @@ function setupFormHandlers() {
 
             appData.deals.push(deal);
             renderDeals();
+            renderDashboard();
             closeDealModal();
             autoSave();
             showNotification('Сделка успешно создана!');
@@ -834,26 +1292,145 @@ function setupFormHandlers() {
             e.preventDefault();
 
             const formData = new FormData(e.target);
+            const isEditing = editingStoreId !== null;
 
-            const store = {
-                id: Date.now(),
-                name: formData.get('name'),
-                type: formData.get('type'),
-                address: formData.get('address'),
-                contact: formData.get('contact'),
-                email: formData.get('email'),
-                manager: formData.get('manager'),
-                status: 'potential',
-                monthlyRevenue: 0,
-                contractDate: null,
-                rating: 0
-            };
+            if (isEditing) {
+                // Редактируем существующий магазин
+                const store = appData.stores.find(s => s.id === editingStoreId);
+                if (store) {
+                    store.name = formData.get('name');
+                    store.type = formData.get('type');
+                    store.address = formData.get('address');
+                    store.contact = formData.get('contact');
+                    store.email = formData.get('email');
+                    store.manager = formData.get('manager');
+                    store.monthlyRevenue = parseInt(formData.get('monthlyRevenue')) || 0;
 
-            appData.stores.push(store);
+                    // Обновляем имя магазина в сделках и контактах
+                    appData.deals.forEach(deal => {
+                        if (deal.storeId === editingStoreId) {
+                            deal.storeName = store.name;
+                        }
+                    });
+                    appData.contacts.forEach(contact => {
+                        if (contact.storeId === editingStoreId) {
+                            contact.storeName = store.name;
+                        }
+                    });
+
+                    showNotification('Магазин успешно обновлен!');
+                }
+            } else {
+                // Создаем новый магазин
+                const store = {
+                    id: Date.now(),
+                    name: formData.get('name'),
+                    type: formData.get('type'),
+                    address: formData.get('address'),
+                    contact: formData.get('contact'),
+                    email: formData.get('email'),
+                    manager: formData.get('manager'),
+                    status: 'potential',
+                    monthlyRevenue: parseInt(formData.get('monthlyRevenue')) || 0,
+                    contractDate: null,
+                    rating: 0
+                };
+
+                appData.stores.push(store);
+                showNotification('Магазин успешно добавлен!');
+            }
+
             renderStores();
+            renderDashboard();
             closeStoreModal();
             autoSave();
-            showNotification('Магазин успешно добавлен!');
+        });
+    }
+
+    if (taskForm) {
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const isEditing = editingTaskId !== null;
+
+            if (isEditing) {
+                // Редактируем существующую задачу
+                const task = appData.tasks.find(t => t.id === editingTaskId);
+                if (task) {
+                    task.title = formData.get('title');
+                    task.description = formData.get('description');
+                    task.priority = formData.get('priority');
+                    task.dueDate = formData.get('dueDate');
+                    task.storeId = parseInt(formData.get('storeId')) || null;
+
+                    showNotification('Задача успешно обновлена!');
+                }
+            } else {
+                // Создаем новую задачу
+                const task = {
+                    id: Date.now(),
+                    title: formData.get('title'),
+                    description: formData.get('description'),
+                    priority: formData.get('priority'),
+                    dueDate: formData.get('dueDate'),
+                    status: 'pending',
+                    storeId: parseInt(formData.get('storeId')) || null
+                };
+
+                appData.tasks.push(task);
+                showNotification('Задача успешно добавлена!');
+            }
+
+            renderTasks();
+            renderDashboard();
+            closeTaskModal();
+            autoSave();
+        });
+    }
+
+    if (contactForm) {
+        contactForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const storeId = parseInt(formData.get('storeId'));
+            const store = appData.stores.find(s => s.id === storeId);
+            const isEditing = editingContactId !== null;
+
+            if (isEditing) {
+                // Редактируем существующий контакт
+                const contact = appData.contacts.find(c => c.id === editingContactId);
+                if (contact) {
+                    contact.name = formData.get('name');
+                    contact.position = formData.get('position');
+                    contact.storeId = storeId;
+                    contact.storeName = store ? store.name : '';
+                    contact.phone = formData.get('phone');
+                    contact.email = formData.get('email');
+
+                    showNotification('Контакт успешно обновлен!');
+                }
+            } else {
+                // Создаем новый контакт
+                const contact = {
+                    id: Date.now(),
+                    name: formData.get('name'),
+                    position: formData.get('position'),
+                    storeId: storeId,
+                    storeName: store ? store.name : '',
+                    phone: formData.get('phone'),
+                    email: formData.get('email'),
+                    lastContact: new Date().toISOString().split('T')[0]
+                };
+
+                appData.contacts.push(contact);
+                showNotification('Контакт успешно добавлен!');
+            }
+
+            renderContacts();
+            closeContactModal();
+            autoSave();
         });
     }
 }
@@ -883,6 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupSearch();
     setupFormHandlers();
+    setupExcelImport();
 
     // Рендерим начальные данные
     renderDashboard();
@@ -907,15 +1485,36 @@ window.openDealModal = openDealModal;
 window.closeDealModal = closeDealModal;
 window.openStoreModal = openStoreModal;
 window.closeStoreModal = closeStoreModal;
+window.openExcelImportModal = openExcelImportModal;
+window.closeExcelImportModal = closeExcelImportModal;
+window.openTaskModal = openTaskModal;
+window.closeTaskModal = closeTaskModal;
+window.openContactModal = openContactModal;
+window.closeContactModal = closeContactModal;
+window.closeConfirmModal = closeConfirmModal;
 window.removeFile = removeFile;
 window.exportData = exportData;
 window.toggleTheme = toggleTheme;
+window.importFromExcel = importFromExcel;
+window.editStore = editStore;
+window.confirmDeleteStore = confirmDeleteStore;
+window.editTask = editTask;
+window.confirmDeleteTask = confirmDeleteTask;
+window.editContact = editContact;
+window.confirmDeleteContact = confirmDeleteContact;
 
-// Тестирование функций при загрузке
-console.log('🧪 Тестирование функций...');
+// Функции тестирования
+console.log('🧪 Тестирование всех функций...');
 console.log('✅ showNotification:', typeof showNotification === 'function');
 console.log('✅ toggleTheme:', typeof toggleTheme === 'function');
 console.log('✅ exportData:', typeof exportData === 'function');
 console.log('✅ openDealModal:', typeof openDealModal === 'function');
 console.log('✅ setupFileUpload:', typeof setupFileUpload === 'function');
 console.log('✅ renderDeals:', typeof renderDeals === 'function');
+console.log('✅ renderStores:', typeof renderStores === 'function');
+console.log('✅ renderTasks:', typeof renderTasks === 'function');
+console.log('✅ renderContacts:', typeof renderContacts === 'function');
+console.log('✅ editStore:', typeof editStore === 'function');
+console.log('✅ deleteStore:', typeof confirmDeleteStore === 'function');
+console.log('✅ importFromExcel:', typeof importFromExcel === 'function');
+console.log('✅ Все функции готовы к работе!');

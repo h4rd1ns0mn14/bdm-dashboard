@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="app">
@@ -140,10 +141,16 @@
             <div id="stores-page" class="page">
                 <div class="page-header">
                     <h2>Управление магазинами</h2>
-                    <button class="btn btn-primary" onclick="openStoreModal()">
-                        <i class="fas fa-plus"></i>
-                        Добавить магазин
-                    </button>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="openExcelImportModal()">
+                            <i class="fas fa-file-excel"></i>
+                            Импорт из Excel
+                        </button>
+                        <button class="btn btn-primary" onclick="openStoreModal()">
+                            <i class="fas fa-plus"></i>
+                            Добавить магазин
+                        </button>
+                    </div>
                 </div>
                 <div class="stores-grid" id="stores-grid">
                     <!-- Магазины загружаются через JavaScript -->
@@ -353,10 +360,11 @@
     <div id="storeModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Добавить магазин</h3>
+                <h3 id="storeModalTitle">Добавить магазин</h3>
                 <button class="close" onclick="closeStoreModal()" type="button">&times;</button>
             </div>
             <form id="storeForm" class="modal-form">
+                <input type="hidden" id="storeId" name="id">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="storeName">Название *</label>
@@ -395,10 +403,17 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="storeManager">Менеджер *</label>
-                    <input type="text" id="storeManager" name="manager" required
-                           placeholder="ФИО ответственного менеджера">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="storeManager">Менеджер *</label>
+                        <input type="text" id="storeManager" name="manager" required
+                               placeholder="ФИО ответственного менеджера">
+                    </div>
+                    <div class="form-group">
+                        <label for="storeRevenue">Месячный доход (₽)</label>
+                        <input type="number" id="storeRevenue" name="monthlyRevenue"
+                               placeholder="0" min="0">
+                    </div>
                 </div>
 
                 <div class="form-actions">
@@ -406,7 +421,7 @@
                         <i class="fas fa-times"></i>
                         Отмена
                     </button>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" id="storeSubmitBtn">
                         <i class="fas fa-save"></i>
                         Добавить магазин
                     </button>
@@ -415,10 +430,190 @@
         </div>
     </div>
 
-    <!-- Loading Spinner -->
-    <div id="loadingSpinner" class="loading-overlay" style="display: none;">
-        <div class="spinner"></div>
-        <p>Загрузка...</p>
+    <!-- Excel Import Modal -->
+    <div id="excelImportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Импорт магазинов из Excel</h3>
+                <button class="close" onclick="closeExcelImportModal()" type="button">&times;</button>
+            </div>
+            <div class="modal-form">
+                <div class="import-instructions">
+                    <h4>Инструкция по импорту:</h4>
+                    <ol>
+                        <li>Подготовьте Excel файл с колонками: Название, Тип, Адрес, Телефон, Email, Менеджер, Доход</li>
+                        <li>Первая строка должна содержать заголовки</li>
+                        <li>Выберите файл и нажмите "Импортировать"</li>
+                    </ol>
+                </div>
+
+                <div class="file-upload-area excel-upload" id="excelUploadArea">
+                    <div class="file-upload-content">
+                        <i class="fas fa-file-excel"></i>
+                        <p>Выберите Excel файл</p>
+                        <small>Поддерживаются: .xlsx, .xls</small>
+                    </div>
+                    <input type="file" id="excelFile" accept=".xlsx,.xls">
+                </div>
+
+                <div id="excelPreview" class="excel-preview" style="display: none;">
+                    <h4>Предварительный просмотр:</h4>
+                    <div class="preview-table-container">
+                        <table id="previewTable" class="preview-table">
+                            <!-- Заполняется JavaScript -->
+                        </table>
+                    </div>
+                    <div class="import-summary" id="importSummary"></div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeExcelImportModal()">
+                        <i class="fas fa-times"></i>
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" id="importBtn" onclick="importFromExcel()" style="display: none;">
+                        <i class="fas fa-upload"></i>
+                        Импортировать
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="taskModalTitle">Добавить задачу</h3>
+                <button class="close" onclick="closeTaskModal()" type="button">&times;</button>
+            </div>
+            <form id="taskForm" class="modal-form">
+                <input type="hidden" id="taskId" name="id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskTitle">Название задачи *</label>
+                        <input type="text" id="taskTitle" name="title" required
+                               placeholder="Название задачи">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskPriority">Приоритет *</label>
+                        <select id="taskPriority" name="priority" required>
+                            <option value="low">Низкий</option>
+                            <option value="medium" selected>Средний</option>
+                            <option value="high">Высокий</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskDescription">Описание *</label>
+                    <textarea id="taskDescription" name="description" rows="3" required
+                              placeholder="Описание задачи"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskDueDate">Срок выполнения *</label>
+                        <input type="date" id="taskDueDate" name="dueDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskStore">Связанный магазин</label>
+                        <select id="taskStore" name="storeId">
+                            <option value="">Выберите магазин (необязательно)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">
+                        <i class="fas fa-times"></i>
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="taskSubmitBtn">
+                        <i class="fas fa-save"></i>
+                        Добавить задачу
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contact Modal -->
+    <div id="contactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="contactModalTitle">Добавить контакт</h3>
+                <button class="close" onclick="closeContactModal()" type="button">&times;</button>
+            </div>
+            <form id="contactForm" class="modal-form">
+                <input type="hidden" id="contactId" name="id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactName">ФИО *</label>
+                        <input type="text" id="contactName" name="name" required
+                               placeholder="Полное имя контакта">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactPosition">Должность *</label>
+                        <input type="text" id="contactPosition" name="position" required
+                               placeholder="Должность">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="contactStore">Магазин *</label>
+                    <select id="contactStore" name="storeId" required>
+                        <option value="">Выберите магазин</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactPhone">Телефон *</label>
+                        <input type="tel" id="contactPhone" name="phone" required
+                               placeholder="+7 (xxx) xxx-xx-xx">
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmail">Email *</label>
+                        <input type="email" id="contactEmail" name="email" required
+                               placeholder="email@example.com">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeContactModal()">
+                        <i class="fas fa-times"></i>
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="contactSubmitBtn">
+                        <i class="fas fa-save"></i>
+                        Добавить контакт
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content confirm-modal">
+            <div class="modal-header">
+                <h3 id="confirmTitle">Подтверждение</h3>
+            </div>
+            <div class="confirm-body">
+                <p id="confirmMessage">Вы уверены?</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmModal()">
+                    <i class="fas fa-times"></i>
+                    Отмена
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmBtn">
+                    <i class="fas fa-check"></i>
+                    Подтвердить
+                </button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
